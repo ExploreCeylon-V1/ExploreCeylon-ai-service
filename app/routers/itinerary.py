@@ -4,10 +4,8 @@ from app.models.request_models import (
     RegenerateDayRequest
 )
 from app.services.openai_service import generate_completion
-from app.services.prompt_builder import (
-    build_itinerary_prompt,
-    build_regenerate_day_prompt
-)
+from app.services.prompt_builder import build_itinerary_prompt
+from app.services.prompt_builder import build_regenerate_day_prompt
 
 router = APIRouter(prefix="/ai", tags=["Itinerary"])
 
@@ -15,19 +13,21 @@ router = APIRouter(prefix="/ai", tags=["Itinerary"])
 @router.post("/itinerary/generate")
 async def generate_itinerary(request: ItineraryRequest):
     try:
-        prompt = build_itinerary_prompt(
-            start_date    = request.start_date,
-            end_date      = request.end_date,
-            travel_style  = request.travel_style,
-            budget_range  = request.budget_range,
-            group_size    = request.group_size,
-            regions       = request.regions,
-            interests     = request.interests,
-            starting_point= request.starting_point,
-            special_notes = request.special_notes
+        # ← await added (now async)
+        prompt = await build_itinerary_prompt(
+            start_date     = request.start_date,
+            end_date       = request.end_date,
+            travel_style   = request.travel_style,
+            budget_range   = request.budget_range,
+            group_size     = request.group_size,
+            regions        = request.regions,
+            interests      = request.interests,
+            starting_point = request.starting_point,
+            special_notes  = request.special_notes
         )
 
-        result = await generate_completion(prompt, max_tokens=4000)
+        result = await generate_completion(
+            prompt, max_tokens=4000)
         return {"success": True, "data": result}
 
     except Exception as e:
@@ -48,7 +48,8 @@ async def regenerate_day(request: RegenerateDayRequest):
             exclude_regions = request.exclude_regions
         )
 
-        result = await generate_completion(prompt, max_tokens=1000)
+        result = await generate_completion(
+            prompt, max_tokens=1000)
         return {"success": True, "data": result}
 
     except Exception as e:
