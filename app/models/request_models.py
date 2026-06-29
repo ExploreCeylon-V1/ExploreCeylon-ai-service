@@ -13,6 +13,8 @@ class ItineraryRequest(BaseModel):
     starting_point: str = "Colombo"
     special_notes: Optional[str] = None
     trip_id: Optional[int] = None
+    from_location: Optional[str] = None
+    to_location: Optional[str] = None
 
 class RegenerateDayRequest(BaseModel):
     trip_id: int

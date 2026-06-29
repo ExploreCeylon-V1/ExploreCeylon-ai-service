@@ -17,18 +17,31 @@ async def build_itinerary_prompt(
     regions: List[str],
     interests: List[str],
     starting_point: str,
-    special_notes: Optional[str] = None
+    special_notes: Optional[str] = None,
+    from_location: Optional[str] = None,
+    to_location: Optional[str] = None
 ) -> str:
 
-    total_days   = (end_date - start_date).days + 1
-    start_month  = start_date.month
-    end_month    = end_date.month
+    total_days  = (end_date - start_date).days + 1
+    start_month = start_date.month
+    end_month   = end_date.month
+
+    # ── Resolve from/to with fallbacks ────────────────────
+    traveler_from = from_location or starting_point or "Colombo"
+    traveler_to   = to_location or (
+        ", ".join(regions) if regions else "Sri Lanka"
+    )
 
     # ── Fetch real data from Spring Boot DB ───────────────
     destinations = await get_destinations()
     gems         = await get_hidden_gems()
-    events       = await get_events(
-        month=start_month, region=None)
+    events       = await get_events(month=start_month, region=None)
+
+    # ── DEBUG logs ────────────────────────────────────────
+    print(f"[DB] Destinations loaded: {len(destinations)}")
+    print(f"[DB] Gems loaded:         {len(gems)}")
+    print(f"[DB] Events loaded:       {len(events)}")
+    print(f"[TRIP] From: {traveler_from} → To: {traveler_to}")
 
     # ── Format destinations for prompt ────────────────────
     dest_names = [d["name"] for d in destinations[:15]]
@@ -72,16 +85,6 @@ async def build_itinerary_prompt(
 )}
 IMPORTANT: Adjust itinerary to avoid affected regions.
 """
-        
-    # ── Fetch real data from Spring Boot DB ───────────────
-    destinations = await get_destinations()
-    gems         = await get_hidden_gems()
-    events       = await get_events(month=start_month, region=None)
-
-    # ── DEBUG — add these 3 lines ─────────────────────────
-    print(f"[DB] Destinations loaded: {len(destinations)}")
-    print(f"[DB] Gems loaded: {len(gems)}")
-    print(f"[DB] Events loaded: {len(events)}")
 
     # ── Budget guidance ────────────────────────────────────
     budget_guide = {
@@ -95,14 +98,17 @@ IMPORTANT: Adjust itinerary to avoid affected regions.
 
     # ── Interest notes ─────────────────────────────────────
     interest_map = {
-        "hiking":    "Ella Rock, Knuckles, Horton Plains, Adams Peak",
-        "wildlife":  "Yala, Minneriya, Wilpattu, whale watching",
-        "beaches":   "Mirissa, Hiriketiya, Nilaveli, Unawatuna",
-        "history":   "Sigiriya, Polonnaruwa, Anuradhapura, Galle Fort",
-        "food":      "Colombo food tour, cooking classes, street food",
-        "surfing":   "Arugam Bay, Weligama, Hikkaduwa",
-        "culture":   "Kandy Perahera, temples, local villages",
-        "ayurveda":  "Wellness retreats, herbal treatments"
+        "hiking":       "Ella Rock, Knuckles, Horton Plains, Adams Peak",
+        "wildlife":     "Yala, Minneriya, Wilpattu, whale watching",
+        "beaches":      "Mirissa, Hiriketiya, Nilaveli, Unawatuna",
+        "history":      "Sigiriya, Polonnaruwa, Anuradhapura, Galle Fort",
+        "food":         "Colombo food tour, cooking classes, street food",
+        "surfing":      "Arugam Bay, Weligama, Hikkaduwa",
+        "culture":      "Kandy Perahera, temples, local villages",
+        "ayurveda":     "Wellness retreats, herbal treatments",
+        "photography":  "Sigiriya sunrise, tea estates, Galle Fort ramparts, "
+                        "Ella Nine Arch Bridge, Dambulla cave murals",
+        "relaxation":   "Mirissa beach, Unawatuna, Tangalle, Hikkaduwa lagoon",
     }
     interest_notes = "\n".join(
         f"- {interest_map[i.lower()]}"
@@ -110,7 +116,31 @@ IMPORTANT: Adjust itinerary to avoid affected regions.
         if i.lower() in interest_map
     ) or "- General sightseeing"
 
-    prompt = f"""You are an expert Sri Lanka travel planner 
+    # ── Travel style notes ─────────────────────────────────
+    style_notes = {
+        "ADVENTURE":    "Include trekking, rock climbing, white-water rafting, "
+                        "surfing or wildlife safaris where possible.",
+        "CULTURAL":     "Focus on temples, UNESCO sites, traditional crafts, "
+                        "local ceremonies and village visits.",
+        "RELAXATION":   "Prioritize beaches, spa retreats, slow-paced days "
+                        "and scenic viewpoints.",
+        "FAMILY":       "Choose family-friendly activities with short travel "
+                        "times between stops. Avoid extreme activities.",
+        "HONEYMOON":    "Romantic settings — boutique hotels, sunset cruises, "
+                        "private dining, scenic train journeys.",
+        "PILGRIMAGE":   "Include Sri Pada, Kataragama, Anuradhapura sacred city, "
+                        "Kandy Temple of the Tooth.",
+        "WILDLIFE":     "Yala, Minneriya, Wilpattu national parks, "
+                        "whale watching from Mirissa.",
+        "PHOTOGRAPHY":  "Golden hour at Sigiriya, Nine Arch Bridge Ella, "
+                        "Galle Fort streets, tea estate landscapes, "
+                        "Dambulla cave interiors.",
+    }
+    style_note = style_notes.get(
+        travel_style.upper(), "Balance sightseeing and relaxation."
+    )
+
+    prompt = f"""You are an expert Sri Lanka travel planner \
 with deep local knowledge.
 
 Create a complete {total_days}-day Sri Lanka itinerary.
@@ -118,16 +148,25 @@ Create a complete {total_days}-day Sri Lanka itinerary.
 ═══════════════════════════════════
 TRIP DETAILS
 ═══════════════════════════════════
-Start date    : {start_date}
-End date      : {end_date}
-Total days    : {total_days}
-Travel style  : {travel_style}
-Budget        : {budget_range} — {budget_guide.get(budget_range, "")}
-Group size    : {group_size} people
-Starting point: {starting_point}
-Regions       : {", ".join(regions) if regions else "All Sri Lanka"}
-Interests     : {", ".join(interests) if interests else "General"}
-{f"Special notes : {special_notes}" if special_notes else ""}
+Start date        : {start_date}
+End date          : {end_date}
+Total days        : {total_days}
+Travel style      : {travel_style}
+Style guidance    : {style_note}
+Budget            : {budget_range} — {budget_guide.get(budget_range, "")}
+Group size        : {group_size} people
+Traveler is coming FROM : {traveler_from}
+Destination/Region      : {traveler_to}
+Interests         : {", ".join(interests) if interests else "General"}
+{f"Special notes     : {special_notes}" if special_notes else ""}
+
+═══════════════════════════════════
+ROUTING LOGIC
+═══════════════════════════════════
+- Day 1 : Arrive near {traveler_from} (airport / starting city)
+- Focus the itinerary around {traveler_to}
+- Final day : Return to {traveler_from} for departure
+- Optimize route to minimize backtracking
 
 ═══════════════════════════════════
 REAL DESTINATIONS (from database)
@@ -159,14 +198,14 @@ GEOGRAPHIC RULES (MUST FOLLOW)
 ═══════════════════════════════════
 - Never put Jaffna + Yala/Mirissa on consecutive days
 - Never put Arugam Bay + Colombo on consecutive days
-- Group: Sigiriya + Dambulla + Polonnaruwa
+- Group: Sigiriya + Dambulla + Polonnaruwa together
 - Kandy → Ella by train is scenic — recommend it
-- Start and end in Colombo (airport)
+- Start near {traveler_from} and end near {traveler_from}
 - Optimize route to minimize travel time
 
-Return ONLY valid JSON (no markdown):
+Return ONLY valid JSON (no markdown, no explanation):
 {{
-  "tripTitle": "descriptive title",
+  "tripTitle": "{total_days} Days — {traveler_from} to {traveler_to}",
   "totalDays": {total_days},
   "estimatedBudget": <total USD number>,
   "currency": "USD",
@@ -191,6 +230,7 @@ Return ONLY valid JSON (no markdown):
 
     return prompt
 
+
 def build_regenerate_day_prompt(
     day_number: int,
     current_region: str,
@@ -211,16 +251,15 @@ Include 1 hidden gem if possible.
 
 Return ONLY valid JSON:
 {{
-  "dayNumber"      : {day_number},
-  "region"         : "{current_region}",
-  "theme"          : "new theme",
-  "locations"      : ["place1", "place2", "place3"],
-  "accommodation"  : "name",
-  "transport"      : "method",
-  "meals"          : ["breakfast", "lunch", "dinner"],
-  "hiddenGem"      : "gem — description or null",
-  "festivalEvent"  : null,
-  "tips"           : "practical tips",
+  "dayNumber"       : {day_number},
+  "region"          : "{current_region}",
+  "theme"           : "new theme",
+  "locations"       : ["place1", "place2", "place3"],
+  "accommodation"   : "name",
+  "transport"       : "method",
+  "meals"           : ["breakfast", "lunch", "dinner"],
+  "hiddenGem"       : "gem — description or null",
+  "festivalEvent"   : null,
+  "tips"            : "practical tips",
   "estimatedDayCost": 0
 }}"""
-

@@ -23,7 +23,9 @@ async def generate_itinerary(request: ItineraryRequest):
             regions        = request.regions,
             interests      = request.interests,
             starting_point = request.starting_point,
-            special_notes  = request.special_notes
+            special_notes  = request.special_notes,
+            from_location  = request.from_location,  
+            to_location    = request.to_location
         )
 
         result = await generate_completion(
