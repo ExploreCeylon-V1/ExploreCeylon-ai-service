@@ -31,7 +31,7 @@ class MonsoonCheckRequest(BaseModel):
 
 class BudgetEstimateRequest(BaseModel):
     duration_days: int
-    travel_style: str = "MID_RANGE"
+    budget_range: str = "MID_RANGE"
     group_size: int = 2
     regions: List[str] = []
 

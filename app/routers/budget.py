@@ -14,7 +14,7 @@ BUDGET_RATES = {
 async def estimate_budget(request: BudgetEstimateRequest):
     try:
         rates = BUDGET_RATES.get(
-            request.travel_style.upper(), BUDGET_RATES["MID_RANGE"])
+            request.budget_range.upper(), BUDGET_RATES["MID_RANGE"])
 
         per_person_per_day = sum(rates.values())
         total_per_person   = per_person_per_day * request.duration_days
@@ -30,7 +30,7 @@ async def estimate_budget(request: BudgetEstimateRequest):
         return {
             "success": True,
             "data": {
-                "travel_style":      request.travel_style,
+                "budget_range":      request.budget_range,
                 "duration_days":     request.duration_days,
                 "group_size":        request.group_size,
                 "per_person_total":  round(total_per_person, 2),
