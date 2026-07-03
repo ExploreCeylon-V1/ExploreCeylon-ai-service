@@ -4,8 +4,10 @@ from app.data.monsoon_data import get_monsoon_warning
 from app.services.db_service import (
     get_destinations,
     get_hidden_gems,
-    get_events,
-    get_guides
+    get_events_trip_sync,
+    search_destinations,
+    get_nearby_destinations,
+    get_nearby_gems,
 )
 
 async def build_itinerary_prompt(
@@ -32,25 +34,56 @@ async def build_itinerary_prompt(
         ", ".join(regions) if regions else "Sri Lanka"
     )
 
+    # ── Resolve a geographic center for the trip, so we only send the
+    # AI candidates that are actually near where the traveler is going
+    # instead of just the top-rated destinations nationwide ─────────
+    center = None
+    geocode_query = to_location or (regions[0] if regions else None)
+    if geocode_query:
+        geocode_matches = await search_destinations(geocode_query)
+        if geocode_matches:
+            top_match = geocode_matches[0]
+            if top_match.get("latitude") is not None \
+                    and top_match.get("longitude") is not None:
+                center = (top_match["latitude"], top_match["longitude"])
+
     # ── Fetch real data from Spring Boot DB ───────────────
-    destinations = await get_destinations()
-    gems         = await get_hidden_gems()
-    events       = await get_events(month=start_month, region=None)
+    if center:
+        destinations = await get_nearby_destinations(
+            center[0], center[1], limit=15)
+        gems = await get_nearby_gems(center[0], center[1], limit=10)
+    else:
+        # No geocoded center resolved (unrecognized destination name) —
+        # fall back to the top-rated nationwide lists.
+        destinations = await get_destinations()
+        gems         = await get_hidden_gems()
+    events = await get_events_trip_sync(start_date, end_date)
 
     # ── DEBUG logs ────────────────────────────────────────
-    print(f"[DB] Destinations loaded: {len(destinations)}")
+    print(f"[DB] Destinations loaded: {len(destinations)} "
+          f"(center={'resolved' if center else 'none'})")
     print(f"[DB] Gems loaded:         {len(gems)}")
     print(f"[DB] Events loaded:       {len(events)}")
     print(f"[TRIP] From: {traveler_from} → To: {traveler_to}")
 
-    # ── Format destinations for prompt ────────────────────
-    dest_names = [d["name"] for d in destinations[:15]]
+    # ── Format destinations for prompt (with coordinates, so the AI
+    # can reason about real distances instead of guessing) ─────────
+    def with_coords(name, lat, lng):
+        if lat is not None and lng is not None:
+            return f"{name} ({lat:.4f}, {lng:.4f})"
+        return name
+
+    dest_names = [
+        with_coords(d["name"], d.get("latitude"), d.get("longitude"))
+        for d in destinations[:15]
+    ]
     dest_text  = ", ".join(dest_names) if dest_names else \
         "Sigiriya, Ella, Kandy, Galle, Yala, Mirissa"
 
     # ── Format hidden gems for prompt ─────────────────────
     gem_names = [
-        f"{g['title']} ({g['district']})"
+        with_coords(f"{g['title']} ({g['district']})",
+                    g.get("latitude"), g.get("longitude"))
         for g in gems[:10]
     ]
     gems_text = "\n".join(
@@ -88,12 +121,12 @@ IMPORTANT: Adjust itinerary to avoid affected regions.
 
     # ── Budget guidance ────────────────────────────────────
     budget_guide = {
-        "BUDGET":    "Guesthouses LKR 3000-6000/night, "
-                     "local food, buses",
-        "MID_RANGE": "Boutique hotels USD 40-80/night, "
-                     "good restaurants, private transport",
-        "LUXURY":    "Premium resorts USD 150+/night, "
-                     "fine dining, private vehicle with driver"
+        "BUDGET":    "Prefer free/low-cost attractions, local food, "
+                     "short-distance routing and affordable activities",
+        "MID_RANGE": "Balance paid attractions, comfortable pacing, "
+                     "good restaurants and efficient routing",
+        "LUXURY":    "Prioritize premium experiences, scenic viewpoints, "
+                     "fine dining areas and relaxed pacing"
     }
 
     # ── Interest notes ─────────────────────────────────────
@@ -126,8 +159,8 @@ IMPORTANT: Adjust itinerary to avoid affected regions.
                         "and scenic viewpoints.",
         "FAMILY":       "Choose family-friendly activities with short travel "
                         "times between stops. Avoid extreme activities.",
-        "HONEYMOON":    "Romantic settings — boutique hotels, sunset cruises, "
-                        "private dining, scenic train journeys.",
+        "HONEYMOON":    "Romantic settings, sunset viewpoints, scenic routes, "
+                        "slow-paced days and memorable dining areas.",
         "PILGRIMAGE":   "Include Sri Pada, Kataragama, Anuradhapura sacred city, "
                         "Kandy Temple of the Tooth.",
         "WILDLIFE":     "Yala, Minneriya, Wilpattu national parks, "
@@ -136,8 +169,18 @@ IMPORTANT: Adjust itinerary to avoid affected regions.
                         "Galle Fort streets, tea estate landscapes, "
                         "Dambulla cave interiors.",
     }
-    style_note = style_notes.get(
-        travel_style.upper(), "Balance sightseeing and relaxation."
+    selected_styles = [
+        s.strip().upper()
+        for s in travel_style.replace("|", ",").split(",")
+        if s.strip()
+    ]
+    matched_style_notes = [
+        style_notes[s] for s in selected_styles if s in style_notes
+    ]
+    style_note = (
+        " ".join(matched_style_notes)
+        if matched_style_notes
+        else "Balance sightseeing and relaxation."
     )
 
     prompt = f"""You are an expert Sri Lanka travel planner \
@@ -167,6 +210,9 @@ ROUTING LOGIC
 - Focus the itinerary around {traveler_to}
 - Final day : Return to {traveler_from} for departure
 - Optimize route to minimize backtracking
+- Destinations and hidden gems below are listed with real (latitude,
+  longitude) coordinates where available — use them to judge actual
+  distance and group geographically close places on the same day
 
 ═══════════════════════════════════
 REAL DESTINATIONS (from database)
@@ -199,9 +245,11 @@ GEOGRAPHIC RULES (MUST FOLLOW)
 - Never put Jaffna + Yala/Mirissa on consecutive days
 - Never put Arugam Bay + Colombo on consecutive days
 - Group: Sigiriya + Dambulla + Polonnaruwa together
-- Kandy → Ella by train is scenic — recommend it
+- Keep Kandy and Ella in a logical sequence if both are included
 - Start near {traveler_from} and end near {traveler_from}
 - Optimize route to minimize travel time
+- Do not recommend hotels, guides, vehicles or transport bookings.
+- The traveler will add hotels, guides and vehicles manually later.
 
 Return ONLY valid JSON (no markdown, no explanation):
 {{
@@ -217,8 +265,6 @@ Return ONLY valid JSON (no markdown, no explanation):
       "region": "city name",
       "theme": "day theme",
       "locations": ["place1", "place2", "place3"],
-      "accommodation": "hotel/guesthouse name",
-      "transport": "transport method",
       "meals": ["breakfast", "lunch", "dinner"],
       "hiddenGem": <null or "gem — description">,
       "festivalEvent": <null or "festival name">,
@@ -255,8 +301,6 @@ Return ONLY valid JSON:
   "region"          : "{current_region}",
   "theme"           : "new theme",
   "locations"       : ["place1", "place2", "place3"],
-  "accommodation"   : "name",
-  "transport"       : "method",
   "meals"           : ["breakfast", "lunch", "dinner"],
   "hiddenGem"       : "gem — description or null",
   "festivalEvent"   : null,
