@@ -10,7 +10,6 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 async def generate_completion(prompt: str, max_tokens: int = 4000) -> dict:
     try:
-        print(f"[DEBUG] Groq API Key loaded: {GROQ_API_KEY[:15] if GROQ_API_KEY else 'NOT FOUND'}...")
         print(f"[DEBUG] Sending request to Groq...")
 
         async with httpx.AsyncClient(timeout=60.0) as client:
