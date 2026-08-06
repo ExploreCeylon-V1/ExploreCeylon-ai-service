@@ -2,20 +2,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import date
 
-class ItineraryRequest(BaseModel):
-    start_date: date
-    end_date: date
-    travel_style: str = "CULTURAL"
-    budget_range: str = "MID_RANGE"
-    group_size: int = 2
-    regions: List[str] = []
-    interests: List[str] = []
-    starting_point: str = "Colombo"
-    special_notes: Optional[str] = None
-    trip_id: Optional[int] = None
-    from_location: Optional[str] = None
-    to_location: Optional[str] = None
-
 class PlannedStop(BaseModel):
     """A single stop the backend has already decided on — the LLM only
     fills in a `description` for it (see /ai/itinerary/narrate); it must

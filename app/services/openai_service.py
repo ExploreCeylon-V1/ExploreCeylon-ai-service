@@ -7,12 +7,20 @@ load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 async def generate_completion(prompt: str, max_tokens: int = 4000) -> dict:
     try:
-        print(f"[DEBUG] Sending request to Groq...")
+        print(f"[DEBUG] Sending request to Groq ({GROQ_MODEL})...")
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        timeout_config = httpx.Timeout(
+            connect=5.0,
+            read=15.0,
+            write=15.0,
+            pool=15.0
+        )
+
+        async with httpx.AsyncClient(timeout=timeout_config) as client:
             response = await client.post(
                 GROQ_URL,
                 headers={
@@ -20,7 +28,7 @@ async def generate_completion(prompt: str, max_tokens: int = 4000) -> dict:
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "llama-3.3-70b-versatile",
+                    "model": GROQ_MODEL,
                     "messages": [
                         {
                             "role": "system",
