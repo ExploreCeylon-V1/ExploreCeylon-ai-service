@@ -77,7 +77,7 @@ The ExploreCeylon AI Service is a small **FastAPI microservice** that gives the 
 | `typing-inspection` | 0.4.2 |
 | `typing_extensions` | 4.15.0 |
 
-**LLM provider:** [Groq](https://console.groq.com) — model `llama-3.3-70b-versatile`, called directly over `httpx` against Groq's **OpenAI-compatible** chat completions endpoint (`https://api.groq.com/openai/v1/chat/completions`). The `openai` package is listed in `requirements.txt` but `app/services/openai_service.py` (despite its name) makes plain `httpx` calls to Groq and never actually imports the `openai` SDK — it's a leftover dependency, not a second AI provider.
+**LLM provider:** [Groq](https://console.groq.com) — model `openai/gpt-oss-120b`, called directly over `httpx` against Groq's **OpenAI-compatible** chat completions endpoint (`https://api.groq.com/openai/v1/chat/completions`). The `openai` package is listed in `requirements.txt` but `app/services/openai_service.py` (despite its name) makes plain `httpx` calls to Groq and never actually imports the `openai` SDK — it's a leftover dependency, not a second AI provider.
 
 > ⚠️ `requirements.txt` is saved as **UTF-16** in this repo (it reads as garbled bytes if opened as UTF-8) — re-save it as UTF-8 if you regenerate it with `pip freeze`, or tooling that expects a plain-text requirements file may choke on it.
 
@@ -161,7 +161,7 @@ Create a `.env` file in the project root (see [Environment Variables](#-environm
 ```bash
 GROQ_API_KEY=your-groq-api-key-here
 APP_PORT=8000
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-120b
 ```
 
 ### 5. Run the service
@@ -197,7 +197,7 @@ Read via `os.getenv()` (in `app/services/openai_service.py`, loaded through `pyt
 |---|---|:---:|
 | `GROQ_API_KEY` | Your Groq API key — get one free at [console.groq.com](https://console.groq.com) (sign up, create an API key under **API Keys**) | ✅ |
 | `APP_PORT` | Port the service listens on (referenced in `.env`; the actual `uvicorn` command still needs `--port` passed explicitly, or a process manager reading this var) | ⬜ |
-| `GROQ_MODEL` | Model name intended for use with Groq (present in `.env`, but note `app/services/openai_service.py` currently **hardcodes** `"llama-3.3-70b-versatile"` in the request body rather than reading this variable — set it for documentation/consistency, but changing it alone won't change the model actually called) | ⬜ |
+| `GROQ_MODEL` | Model name intended for use with Groq (present in `.env`, but note `app/services/openai_service.py` currently **hardcodes** `"openai/gpt-oss-120b"` in the request body rather than reading this variable — set it for documentation/consistency, but changing it alone won't change the model actually called) | ⬜ |
 
 `.env.example`:
 
@@ -209,8 +209,8 @@ GROQ_API_KEY=gsk_your_groq_api_key_here
 APP_PORT=8000
 
 # Groq model — currently informational only; the model is hardcoded
-# in app/services/openai_service.py as "llama-3.3-70b-versatile"
-GROQ_MODEL=llama-3.3-70b-versatile
+# in app/services/openai_service.py as "openai/gpt-oss-120b"
+GROQ_MODEL=openai/gpt-oss-120b
 ```
 
 ---
@@ -432,7 +432,7 @@ Rule-based only — no LLM call.
                              │       │                     │
                              │       ▼                     │
                              │      Groq API                │
-                             │  (llama-3.3-70b-versatile)   │
+                             │  (openai/gpt-oss-120b)   │
                              │  response_format=json_object │
                              └─────────────┬───────────────┘
                                            │  strict JSON: title,
@@ -537,7 +537,7 @@ docker build -t exploreceylon-ai-service .
 ```bash
 docker run -p 8000:8000 \
   -e GROQ_API_KEY=your-groq-api-key-here \
-  -e GROQ_MODEL=llama-3.3-70b-versatile \
+  -e GROQ_MODEL=openai/gpt-oss-120b \
   exploreceylon-ai-service
 ```
 
