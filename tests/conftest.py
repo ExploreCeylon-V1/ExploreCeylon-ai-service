@@ -6,7 +6,7 @@ import os
 # does not override variables that are already set, so this value wins
 # even if a real .env file is present.
 os.environ.setdefault("GROQ_API_KEY", "test-dummy-groq-api-key")
-os.environ.setdefault("GROQ_MODEL", "llama-3.3-70b-versatile")
+os.environ.setdefault("GROQ_MODEL", "openai/gpt-oss-120b")
 os.environ.setdefault("APP_PORT", "8000")
 
 import pytest
